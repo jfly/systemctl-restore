@@ -1,0 +1,39 @@
+[project]
+name = "systemctl-restore"
+version = "0.1.0"
+description = "Systemd aware tool to restore backups"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.24.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-cov>=6.0.0",
+]
+
+[project.scripts]
+systemctl-restore = "systemctl_restore.cli:app"
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.pytest.ini_options]
+# Always print a full diff on assertion failures.
+verbosity_assertions = 2
+addopts = [
+    # https://docs.pytest.org/en/stable/explanation/goodpractices.html#which-import-mode
+    "--import-mode=importlib",
+    "--cov=src",
+    "--doctest-modules",
+]
+# Treat warnings as errors.
+filterwarnings = [
+    "error",
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true

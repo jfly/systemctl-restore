@@ -1,0 +1,11 @@
+# Nix
+/.direnv
+/result*
+
+# Interactive nix test driver
+/.nixos-test-history
+/*.qcow2
+
+# Python
+__pycache__/
+/.coverage*
