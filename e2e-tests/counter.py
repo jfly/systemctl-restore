@@ -3,14 +3,6 @@ import os
 import socket
 from pathlib import Path
 
-state_dir = Path(os.environ["STATE_DIRECTORY"])
-
-counter_file = state_dir / "counter.txt"
-if counter_file.exists():
-    count = int(counter_file.read_text())
-else:
-    count = 0
-
 
 # Copied from
 # <https://gist.github.com/grawity/6e5980981dccf66f554bbebb8cd169fc>
@@ -54,4 +46,13 @@ async def main():
         await server.serve_forever()
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    state_dir = Path(os.environ["STATE_DIRECTORY"])
+
+    counter_file = state_dir / "counter.txt"
+    if counter_file.exists():
+        count = int(counter_file.read_text())
+    else:
+        count = 0
+
+    asyncio.run(main())

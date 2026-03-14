@@ -1,5 +1,6 @@
 import datetime as dt
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
@@ -75,7 +76,7 @@ def main(
     restore_dir: Annotated[
         Path,
         typer.Argument(
-            help="Backup of /var/lib to restore",
+            help="System backup to restore",
             exists=True,
             readable=True,
             file_okay=False,
@@ -88,7 +89,9 @@ def main(
             help="Directory to place backups of data before the restore. This lets you undo a problematic restore.",
             parser=parse_empty_or_nonexistent_path,
         ),
-    ] = Path(f"/var/lib.bak-{dt.datetime.now().isoformat(timespec='seconds')}"),
+    ] = Path(
+        f"./pre-restore-snapshot-{dt.datetime.now().isoformat(timespec='seconds')}"
+    ),
     yes: Annotated[
         bool, typer.Option("--yes", "-y", help="Answer yes to every question.")
     ] = False,
@@ -102,25 +105,35 @@ def main(
 ):  # pragma: no cover # tested in e2e tests
     state_directory_by_service = systemd.get_state_directory_by_service()
 
-    warnings = restore(
+    plan = plan_restore(
         restore_dir,
         backup_dir,
         state_directory_by_service,
-        yes_all=yes,
         dry_run=dry_run,
     )
-    print()
-    if len(warnings) > 0:
+
+    if len(plan.warnings) > 0:
         print(
-            f"[yellow bold]Finished, but encountered {plural(len(warnings), 'warning')}. See above.[/yellow bold]"
+            f"[red bold]Encountered {plural(len(plan.warnings), 'warning')}. See above.[/red bold]"
         )
-    else:
-        print("[green]Success![/green]")
+        raise typer.Exit(1)
+
+    for todo in plan.to_restore:
+        print(todo)
+
+    ask = build_asker(yes)
+    if not ask("Proceed?"):
+        raise typer.Exit()
+
+    for todo in plan.to_restore:
+        todo.doit()
+
+    print("[green]Success![/green]")
 
     print(
-        f"In case anything went wrong, there are backups of the previous state directories in {backup_dir}."
+        f"In case anything went wrong, there is a backup of the previous state in {backup_dir}."
     )
-    print(f"To restore them: {sys.argv[0]} {backup_dir}")
+    print(f"To restore it: {sys.argv[0]} {backup_dir}")
 
 
 def forget_and_any_empty_ancestors(forget_me: DirectoryTree):
@@ -130,15 +143,18 @@ def forget_and_any_empty_ancestors(forget_me: DirectoryTree):
             forget_and_any_empty_ancestors(parent)
 
 
-def restore(
+@dataclass
+class Plan:
+    warnings: list[str]
+    to_restore: list[RestoreService]
+
+
+def plan_restore(
     restore_dir: Path,
     backup_dir: Path,
     state_directory_by_service: dict[systemd.Service, Path],
     dry_run: bool,
-    yes_all: bool,
-) -> list[str]:
-    ask = build_asker(yes_all)
-
+) -> Plan:
     restore_dirtree = DirectoryTree(restore_dir)
 
     warnings = []
@@ -146,24 +162,26 @@ def restore(
     def warn(msg):
         nonlocal warnings
         warnings.append(msg)
-        print(f"[yellow]{msg}[/yellow]")
+        print(f"[red]{msg}[/red]")
 
     to_restore: list[RestoreService] = []
 
     services_by_state_directory = flip_dict(state_directory_by_service)
     for state_directory, services in services_by_state_directory.items():
-        relpath = state_directory.relative_to("/var/lib")
+        relpath = state_directory.relative_to("/")
         try:
             restore_me = restore_dirtree / str(relpath)
         except ChildNotFoundError:
-            # This service must not be backed up. That's fine, skip it.
+            # This service is apparently not be backed up. That's fine, skip it.
             continue
 
         to_restore.append(
             RestoreService(
                 services=services,
-                state_directory=state_directory,
-                state_to_restore=restore_me.to_path(),
+                relative_paths_to_restore=[
+                    restore_me.to_path().relative_to(restore_dir)
+                ],
+                restore_dir=restore_dir,
                 backup_dir=backup_dir,
                 dry_run=dry_run,
             )
@@ -176,13 +194,10 @@ def restore(
 
     if len(restore_dirtree.children()) > 0:
         warn(
-            f"There is some stuff left in {restore_dir} that I don't know how to handle:\n{restore_dirtree.pretty_tree()}"
+            f"There is data left in {restore_dir} that I don't know how to handle:\n{restore_dirtree.pretty_tree()}"
         )
 
-    for todo in to_restore:
-        todo.doit(ask)
-
-    return warnings
+    return Plan(warnings=warnings, to_restore=to_restore)
 
 
 if __name__ == "__main__":

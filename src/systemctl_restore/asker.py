@@ -11,7 +11,7 @@ def input(msg: str) -> str:  # pragma: no cover
     return builtins.input()
 
 
-def build_asker(always_yes: bool) -> Asker:
+def build_asker(always_yes: bool) -> Asker:  # pragma: no cover
     def ask(question: str) -> bool:
         value_by_choice = {
             "y": True,

@@ -40,7 +40,7 @@ in
       assert_count(1)
       assert_count(2)
 
-      # Backup counter.service's StateDirectory.
+      # Backup counter.service.
       is_dynamic = ${
         if nodes.machine.systemd.services.counter.serviceConfig.DynamicUser or false then
           "True"
@@ -48,26 +48,26 @@ in
           "False"
       }
       if is_dynamic:
-          machine.succeed("mkdir -p /tmp/backup/private")
-          machine.succeed("cp -r /var/lib/private/counter /tmp/backup/private/counter")
+          machine.succeed("mkdir -p /tmp/backup/var/lib/private")
+          machine.succeed("cp -r /var/lib/private/counter /tmp/backup/var/lib/private/counter")
       else:
-          machine.succeed("mkdir -p /tmp/backup")
-          machine.succeed("cp -r /var/lib/counter /tmp/backup/counter")
+          machine.succeed("mkdir -p /tmp/backup/var/lib")
+          machine.succeed("cp -r /var/lib/counter /tmp/backup/var/lib/counter")
 
       # Make a couple more calls, increasing the visitor count to 4.
       assert_count(3)
       assert_count(4)
 
       # Restore the backup.
-      output = machine.succeed("systemctl-restore /tmp/backup --yes --backup-dir /var/lib.bak-1")
-      assert re.search("To restore them: .*systemctl-restore /var/lib.bak", output, re.DOTALL), f"Missing restore command in: {output}"
+      output = machine.succeed("systemctl-restore /tmp/backup --yes --backup-dir ./backup1")
+      assert re.search("To restore it: .*systemctl-restore backup1", output, re.DOTALL), f"Missing restore command in: {output}"
 
       # The backup restored the count to 2, so we should see visitor number
       # 3 again.
       assert_count(3)
 
       # Undo the restore, confirm the visitor count is back to 4 + 1 = 5.
-      machine.succeed("systemctl-restore /var/lib.bak-1 --backup-dir /var/lib.bak-2 --yes")
+      machine.succeed("systemctl-restore ./backup1 --yes --backup-dir ./backup2")
       assert_count(5)
     '';
 }
