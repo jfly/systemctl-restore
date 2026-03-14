@@ -49,7 +49,7 @@
       imports = [
         ./nix/formatting.nix
         ./nix/uv-workspace.nix
-        ./nix/e2e-test.nix
+        ./e2e-tests
       ];
     };
 }

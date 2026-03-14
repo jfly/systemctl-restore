@@ -70,7 +70,7 @@ def get_state_directory_by_service() -> dict[
     """Fetch the StateDirectory for all services."""
 
     cp = subprocess.run(
-        ["systemctl", "show", "--property", "Id,StateDirectory", "*"],
+        ["systemctl", "show", "--property", "Id,StateDirectory,DynamicUser", "*"],
         check=True,
         text=True,
         stdout=subprocess.PIPE,
@@ -80,9 +80,22 @@ def get_state_directory_by_service() -> dict[
 
     for service_info in parse_systemctl_show(cp.stdout):
         service = Service(service_info["Id"])
+
+        dynamic_user = {
+            "yes": True,
+            "no": False,
+            None: False,
+        }.get(service_info.get("DynamicUser"))
+
         state_dir_str = service_info.get("StateDirectory")
         if state_dir_str is not None and state_dir_str != "":
-            state_dir = Path("/var/lib") / state_dir_str
+            # From `man systemd.exec`:
+            # > If DynamicUser= is used, the logic for [...] StateDirectory= is
+            # > slightly altered: the directories are created below [...] /var/lib/private.
+            parent_dir = (
+                Path("/var/lib") if not dynamic_user else Path("/var/lib/private")
+            )
+            state_dir = parent_dir / state_dir_str
             state_dir_by_service[service] = state_dir
 
     return state_dir_by_service
