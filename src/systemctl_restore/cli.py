@@ -38,23 +38,24 @@ def plural(count: int, thing: str) -> str:
     return f"{count} {thing}"
 
 
-def flip_dict[K, V](d: dict[K, V]) -> dict[V, list[K]]:
+def flip_and_explode_dict[K, V](d: dict[K, list[V]]) -> dict[V, list[K]]:
     """
-    Give a dict mapping K -> V, flips it so V -> [K].
+    Give a dict mapping K -> [V], flips and explodes it so V -> [K].
 
-    >>> flip_dict({'a': 1, 'b': 2})
-    {1: ['a'], 2: ['b']}
+    >>> flip_and_explode_dict({'a': [1], 'b': [2, 3]})
+    {1: ['a'], 2: ['b'], 3: ['b']}
 
-    >>> flip_dict({'a': 1, 'A': 1})
+    >>> flip_and_explode_dict({'a': [1], 'A': [1]})
     {1: ['a', 'A']}
     """
 
     result: dict[V, list[K]] = {}
-    for k, v in d.items():
-        if v not in result:
-            result[v] = []
+    for k, vs in d.items():
+        for v in vs:
+            if v not in result:
+                result[v] = []
 
-        result[v].append(k)
+            result[v].append(k)
 
     return result
 
@@ -69,6 +70,22 @@ def parse_empty_or_nonexistent_path(value: str) -> Path:
             raise typer.BadParameter("must be empty")
 
     return p
+
+
+def guess_state_directories_by_service(
+    restore_dir: Path,
+) -> dict[systemd.Service, list[Path]]:  # pragma: no cover # tested in e2e tests
+    """
+    Given a `restore_dir`, try to guess which directories correspond to which systemd services.
+    For services that declare a StateDirectory, there's no guessing involved.
+    For other services which use systemd-tmpfiles, we can make a best guess by
+    looking at folder ownership.
+    """
+    state_dir_by_service = systemd.get_state_directory_by_service()
+
+    # TODO: actually scan through `restore_dir` and see if we can guess appropriate directories.
+
+    return {service: [state_dir] for service, state_dir in state_dir_by_service.items()}
 
 
 @app.command()
@@ -103,12 +120,12 @@ def main(
         ),
     ] = False,
 ):  # pragma: no cover # tested in e2e tests
-    state_directory_by_service = systemd.get_state_directory_by_service()
+    state_directories_by_service = guess_state_directories_by_service(restore_dir)
 
     plan = plan_restore(
         restore_dir,
         backup_dir,
-        state_directory_by_service,
+        state_directories_by_service,
         dry_run=dry_run,
     )
 
@@ -152,7 +169,7 @@ class Plan:
 def plan_restore(
     restore_dir: Path,
     backup_dir: Path,
-    state_directory_by_service: dict[systemd.Service, Path],
+    state_directories_by_service: dict[systemd.Service, list[Path]],
     dry_run: bool,
 ) -> Plan:
     restore_dirtree = DirectoryTree(restore_dir)
@@ -166,7 +183,7 @@ def plan_restore(
 
     to_restore: list[RestoreService] = []
 
-    services_by_state_directory = flip_dict(state_directory_by_service)
+    services_by_state_directory = flip_and_explode_dict(state_directories_by_service)
     for state_directory, services in services_by_state_directory.items():
         relpath = state_directory.relative_to("/")
         try:

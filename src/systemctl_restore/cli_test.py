@@ -24,15 +24,13 @@ def test_restore_all(tmp_path: Path):
                         └── nested-statefile
         """)
 
-    state_directory_by_service = {
+    dirs_by_service = {
         # This service is not backed up. That's fine.
-        systemd.Service("bluetooth.service"): Path("/var/lib/bluetooth"),
-        systemd.Service("nested.service"): Path("/var/lib/nested/state"),
+        systemd.Service("bluetooth.service"): [Path("/var/lib/bluetooth")],
+        systemd.Service("nested.service"): [Path("/var/lib/nested/state")],
     }
 
-    plan = plan_restore(
-        restore_dir, backup_dir, state_directory_by_service, dry_run=True
-    )
+    plan = plan_restore(restore_dir, backup_dir, dirs_by_service, dry_run=True)
     assert plan.warnings == []
 
 
@@ -61,14 +59,12 @@ def test_unhandled_directories(tmp_path: Path):
                 └── what-is-this
         """)
 
-    state_directory_by_service = {
-        systemd.Service("bluetooth.service"): Path("/var/lib/bluetooth"),
-        systemd.Service("nested.service"): Path("/var/lib/nested/state"),
+    dirs_by_service = {
+        systemd.Service("bluetooth.service"): [Path("/var/lib/bluetooth")],
+        systemd.Service("nested.service"): [Path("/var/lib/nested/state")],
     }
 
-    plan = plan_restore(
-        restore_dir, backup_dir, state_directory_by_service, dry_run=True
-    )
+    plan = plan_restore(restore_dir, backup_dir, dirs_by_service, dry_run=True)
     assert plan.warnings == [
         textwrap.dedent(f"""\
             There is data left in {restore_dir} that I don't know how to handle:
