@@ -7,7 +7,10 @@ machine and you want to restore some service data from backups.
 
 Enter `systemctl-restore`. It's sort of like the opposite of [`systemctl
 clean`](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html#clean%20PATTERN%E2%80%A6).
-Just point it at a backup of your machine (it will ask before doing anything
+
+## Usage
+
+Just give it at a backup of your machine (it will ask before doing anything
 destructive):
 
 ```console
